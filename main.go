@@ -31,10 +31,54 @@ func createUser(c *gin.Context) {
 	c.JSON(201, newUser)
 }
 
+func updateUser(c *gin.Context) {
+	var updatedUser models.User
+
+	if err := c.ShouldBindJSON(&updatedUser); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	usersMutex.Lock()
+	defer usersMutex.Unlock()
+
+	for i, user := range users {
+		if user.ID == updatedUser.ID {
+			users[i] = updatedUser
+			c.JSON(200, updatedUser)
+			return
+		}
+	}
+
+	c.JSON(404, gin.H{"error": "Usuario no encontrado"})
+}
+
 func getUser(c *gin.Context) {
 	usersMutex.Lock()
 	defer usersMutex.Unlock()
 	c.JSON(200, users)
+}
+
+func deleteUser(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "ID inválido"})
+		return
+	}
+
+	usersMutex.Lock()
+	defer usersMutex.Unlock()
+
+	for i, user := range users {
+		if user.ID == id {
+			users = append(users[:i], users[i+1:]...)
+			c.JSON(200, gin.H{"message": "Usuario eliminado"})
+			return
+		}
+	}
+
+	c.JSON(404, gin.H{"error": "Usuario no encontrado"})
 }
 
 func longPoll(c *gin.Context) {
@@ -84,12 +128,13 @@ func main() {
     r := gin.Default()
 
     r.POST("/users", createUser)
-    r.GET("/users", getUser)
+	r.GET("/users", getUser)
+	r.PUT("/users", updateUser)
+	r.DELETE("/users/:id", deleteUser)
 
-    go longPollHandler()
-    r.GET("/longpoll", longPoll)
+	go longPollHandler()
+	r.GET("/longpoll", longPoll)
+	r.GET("/check-changes", checkChanges)
 
-    r.GET("/check-changes", checkChanges)
-
-    r.Run(":8080")
+	r.Run(":8080")
 }
